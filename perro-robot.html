@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Perro Robot de Cartón · Simulador</title>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700&display=swap" rel="stylesheet">
+<style>
+:root{--kraft:#f1ddb5;--kraft2:#d9b97e;--ink:#3b2a14;--s1:#2a5db0;--s2:#7b3fb0;--go:#2e9e6b;--stop:#d94b3d}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%}
+body{font-family:"Baloo 2","Trebuchet MS",system-ui,sans-serif;color:var(--ink);background:linear-gradient(160deg,#1b7f94 0%,#4aa59a 45%,#e9d97c 100%);background-attachment:fixed}
+header{display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:12px 20px}
+h1{margin:0;font-size:1.7rem;color:#fff;text-shadow:0 2px 0 rgba(0,0,0,.25)}
+nav{display:flex;gap:6px;margin-left:auto}
+.tab{border:0;font:inherit;font-weight:700;font-size:1.05rem;padding:8px 18px;border-radius:14px 14px 0 0;background:var(--kraft2);color:var(--ink);cursor:pointer}
+.tab[aria-selected=true]{background:var(--kraft)}
+.tab:focus-visible,button:focus-visible{outline:3px solid #fff;outline-offset:2px}
+main{padding:0 20px 20px}
+.panel[hidden]{display:none}
+.card{background:var(--kraft);border:3px dashed var(--kraft2);outline:6px solid var(--kraft);border-radius:14px;padding:12px;margin:6px}
+.main{display:grid;grid-template-columns:1.15fr 1fr;gap:10px;height:calc(100vh - 110px);min-height:600px}
+.right{display:grid;grid-template-rows:1fr 250px;gap:10px;min-height:0}
+#blocks{height:100%;border-radius:10px;overflow:hidden;background:#fff}
+.sim{position:relative;display:flex;flex-direction:column;min-height:0}
+#stage{flex:1;position:relative;min-height:220px;border-radius:10px;overflow:hidden;background:linear-gradient(#bfe7ee,#f6efc4)}
+#c{width:100%;height:100%;display:block;touch-action:none;cursor:grab}
+.read{position:absolute;left:8px;top:8px;display:flex;gap:6px;flex-wrap:wrap}
+.chip{color:#fff;font-weight:700;padding:2px 12px;border-radius:20px;font-size:.95rem}
+.hint{position:absolute;right:10px;bottom:6px;font-size:.8rem;opacity:.7}
+.bar{display:flex;gap:8px;flex-wrap:wrap;padding-top:8px}
+button.b{font:inherit;font-weight:700;font-size:1.05rem;border:0;color:#fff;padding:7px 18px;border-radius:12px;cursor:pointer;box-shadow:0 3px 0 rgba(0,0,0,.25)}
+button.b:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(0,0,0,.25)}
+.go{background:var(--go)}.stop{background:var(--stop)}.neutral{background:#8a6a3a}
+#msg{align-self:center;font-size:.95rem}
+.codecard{display:flex;flex-direction:column;min-height:0}
+.codecard .top{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.codecard h2{margin:0;font-size:1.1rem;margin-right:auto}
+pre{flex:1;margin:8px 0 0;background:#2b2417;color:#ffe9b8;padding:10px;border-radius:10px;overflow:auto;font:13px/1.45 Consolas,Menlo,monospace;min-height:0}
+.wire{display:grid;grid-template-columns:1.5fr 1fr;gap:10px}
+.wire svg{width:100%;height:auto;background:#fffaf0;border-radius:10px}
+.wire h2{margin:0 0 6px}
+.wire ol{padding-left:22px;margin:0;line-height:1.35}
+.wire li{margin-bottom:8px}
+.tip{background:#fff3c4;border-left:6px solid #e8a100;padding:8px 10px;border-radius:8px;margin-top:10px;font-size:.95rem}
+@media (max-width:900px){
+ .main{display:block;height:auto}
+ #blocks{height:480px}
+ .right{display:block}
+ .sim{height:420px}
+ .codecard{height:300px;margin-top:10px}
+ .wire{grid-template-columns:1fr}
+ nav{margin-left:0}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<header>
+  <h1>🐶 Perro Robot de Cartón</h1>
+  <nav role="tablist">
+    <button class="tab" role="tab" id="t-prog" aria-selected="true" onclick="showTab('prog')">🧩 Programar y probar</button>
+    <button class="tab" role="tab" id="t-cable" aria-selected="false" onclick="showTab('cable')">🔌 Conexiones</button>
+  </nav>
+</header>
+
+<main>
+<section id="p-prog" class="panel">
+  <div class="main">
+    <div class="card"><div id="blocks"></div></div>
+    <div class="right">
+      <div class="card sim">
+        <div id="stage">
+          <canvas id="c"></canvas>
+          <div class="read"><span class="chip" style="background:var(--s1)">Servo 1 · Delantero: <b id="r1">98</b>°</span><span class="chip" style="background:var(--s2)">Servo 2 · Trasero: <b id="r2">90</b>°</span></div>
+          <div class="hint">Arrastra para girar al perro</div>
+        </div>
+        <div class="bar">
+          <button class="b go" onclick="run()">▶ Ejecutar</button>
+          <button class="b stop" onclick="stopRun()">■ Detener</button>
+          <button class="b neutral" onclick="resetDog()">↺ Posición inicial</button>
+          <span id="msg"></span>
+        </div>
+      </div>
+      <div class="card codecard">
+        <div class="top"><h2>Código Arduino (C++)</h2>
+          <button class="b neutral" onclick="copyCode()">📋 Copiar</button>
+          <button class="b neutral" onclick="saveCode()">⬇ Bajar .ino</button></div>
+        <pre id="code"></pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="p-cable" class="panel" hidden>
+  <div class="wire">
+    <div class="card">
+      <h2>Mapa de cables</h2>
+      <svg viewBox="0 0 760 420" role="img" aria-label="Diagrama de conexión de dos servomotores a la placa Arduino">
+        <rect x="30" y="50" width="200" height="320" rx="14" fill="#1f5f7a"/>
+        <rect x="30" y="50" width="70" height="44" rx="4" fill="#bbb"/>
+        <text x="40" y="118" fill="#fff" font-size="16" font-weight="700">Arduino Nano</text>
+        <text x="40" y="140" fill="#cfe9f0" font-size="12">USB al computador</text>
+        <rect x="95" y="190" width="70" height="70" rx="6" fill="#222"/>
+        <g font-size="15" font-weight="700" fill="#fff" text-anchor="end">
+          <text x="212" y="135">D9</text><text x="212" y="175">D10</text>
+          <text x="212" y="255">5V</text><text x="212" y="295">GND</text>
+        </g>
+        <g fill="#f5c542"><circle cx="230" cy="130" r="7"/><circle cx="230" cy="170" r="7"/><circle cx="230" cy="250" r="7"/><circle cx="230" cy="290" r="7"/></g>
+        <g fill="none" stroke-width="5" stroke-linecap="round">
+          <path d="M230 130 C380 130 380 80 520 80" stroke="#f08a1c"/>
+          <path d="M230 170 C380 170 380 270 520 270" stroke="#f08a1c"/>
+          <path d="M230 250 C360 250 380 115 520 115" stroke="#d62828"/>
+          <path d="M230 250 C360 250 380 305 520 305" stroke="#d62828"/>
+          <path d="M230 290 C340 290 400 150 520 150" stroke="#6b4423"/>
+          <path d="M230 290 C340 290 400 340 520 340" stroke="#6b4423"/>
+        </g>
+        <rect x="520" y="45" width="210" height="130" rx="12" fill="#2a5db0"/>
+        <text x="620" y="70" fill="#fff" font-size="16" font-weight="700">Servo 1 · Delantero</text>
+        <rect x="520" y="235" width="210" height="130" rx="12" fill="#7b3fb0"/>
+        <text x="620" y="260" fill="#fff" font-size="16" font-weight="700">Servo 2 · Trasero</text>
+        <g font-size="13" fill="#fff">
+          <circle cx="520" cy="80" r="6" fill="#f08a1c"/><text x="535" y="96">Señal (naranja)</text>
+          <circle cx="520" cy="115" r="6" fill="#d62828"/><text x="535" y="131">+5V (rojo)</text>
+          <circle cx="520" cy="150" r="6" fill="#6b4423"/><text x="535" y="166">GND (marrón)</text>
+          <circle cx="520" cy="270" r="6" fill="#f08a1c"/><text x="535" y="286">Señal (naranja)</text>
+          <circle cx="520" cy="305" r="6" fill="#d62828"/><text x="535" y="321">+5V (rojo)</text>
+          <circle cx="520" cy="340" r="6" fill="#6b4423"/><text x="535" y="356">GND (marrón)</text>
+        </g>
+      </svg>
+    </div>
+    <div class="card">
+      <h2>Paso a paso</h2>
+      <ol>
+        <li>Con la placa <b>desconectada</b> del USB, ten a mano los dos servos y 6 cables.</li>
+        <li><b>Servo 1 (delantero):</b> naranja a <b>D9</b>, rojo a <b>5V</b>, marrón a <b>GND</b>.</li>
+        <li><b>Servo 2 (trasero):</b> naranja a <b>D10</b>, rojo a <b>5V</b>, marrón a <b>GND</b>.</li>
+        <li>Los dos rojos comparten el pin 5V y los dos marrones comparten GND: usa una protoboard o una regleta.</li>
+        <li>Pega el Servo 1 adelante y el Servo 2 atrás. Pega la paleta de cada servo en el centro de un palito de helado (uno delante y otro detrás) y fija las patitas de cartón en los extremos de cada palito.</li>
+        <li>Conecta el USB y carga el código copiado desde el programa.</li>
+      </ol>
+      <div class="tip">⚠️ Hazlo con ayuda de un adulto. Si la placa se reinicia cuando se mueven los servos, alimenta los servos con un portapilas de 4 pilas AA y une su GND con el GND de la placa.</div>
+    </div>
+  </div>
+</section>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/blockly@10.4.3/blockly_compressed.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/blockly@10.4.3/msg/es.js"></script>
+<script>
+const $=s=>document.querySelector(s);
+
+/* ---------- Pestañas ---------- */
+function showTab(n){
+  ['prog','cable'].forEach(k=>{
+    $('#p-'+k).hidden=(k!==n);
+    $('#t-'+k).setAttribute('aria-selected',k===n);
+  });
+  if(n==='prog'){Blockly.svgResize(ws);resize();}
+}
+
+/* ---------- Bloques ---------- */
+Blockly.defineBlocksWithJsonArray([
+ {type:'inicio',message0:'🚩 Al empezar',nextStatement:null,colour:'#e8a100'},
+ {type:'servo1',message0:'🐶 Servo 1 (delante y cabeza) a %1 grados',args0:[{type:'field_number',name:'ANG',value:98,min:0,max:180,precision:1}],previousStatement:null,nextStatement:null,colour:'#2a5db0'},
+ {type:'servo2',message0:'🐾 Servo 2 (atrás) a %1 grados',args0:[{type:'field_number',name:'ANG',value:90,min:0,max:180,precision:1}],previousStatement:null,nextStatement:null,colour:'#7b3fb0'},
+ {type:'esperar',message0:'⏱ Esperar %1 segundos',args0:[{type:'field_number',name:'SEG',value:1,min:0,max:10,precision:0.1}],previousStatement:null,nextStatement:null,colour:'#c9722b'},
+ {type:'repetir',message0:'🔁 Repetir %1 veces',args0:[{type:'field_number',name:'N',value:3,min:1,max:100,precision:1}],message1:'%1',args1:[{type:'input_statement',name:'DO'}],previousStatement:null,nextStatement:null,colour:'#2e9e6b'}
+]);
+
+const Z=[98,90];
+const MOV={
+ avanzar:{txt:'⬆ Avanzar (cada paso %1 ms)',st:[[0,22],[1,-20],[0,-21],[1,20]],x2:0},
+ retroceder:{txt:'⬇ Retroceder (cada paso %1 ms)',st:[[0,-20],[1,-20],[0,20],[1,20]],x2:0},
+ girarIzquierda:{txt:'⬅ Girar a la izquierda (%1 ms)',st:[[0,-40],[1,-20],[0,20],[1,20]],x2:1},
+ girarDerecha:{txt:'➡ Girar a la derecha (%1 ms)',st:[[0,40],[1,20],[0,-20],[1,-20]],x2:1}};
+Blockly.defineBlocksWithJsonArray(Object.entries(MOV).map(([k,m])=>({type:k,message0:m.txt,args0:[{type:'field_number',name:'VEL',value:100,min:20,max:500,precision:10}],previousStatement:null,nextStatement:null,colour:'#d9822b'})));
+const ws=Blockly.inject('blocks',{
+  renderer:'zelos',trashcan:true,sounds:false,
+  media:'https://cdn.jsdelivr.net/npm/blockly@10.4.3/media/',
+  zoom:{controls:true,startScale:.95},
+  grid:{spacing:24,length:2,colour:'#ddd',snap:true},
+  toolbox:{kind:'categoryToolbox',contents:[
+    {kind:'category',name:'Eventos',colour:'#e8a100',contents:[{kind:'block',type:'inicio'}]},
+    {kind:'category',name:'Acciones',colour:'#2a5db0',contents:[{kind:'block',type:'servo1'},{kind:'block',type:'servo2'}]},
+    {kind:'category',name:'Movimientos',colour:'#d9822b',contents:Object.keys(MOV).map(type=>({kind:'block',type}))},
+    {kind:'category',name:'Tiempo',colour:'#c9722b',contents:[{kind:'block',type:'esperar'}]},
+    {kind:'category',name:'Bucles',colour:'#2e9e6b',contents:[{kind:'block',type:'repetir'}]}
+  ]}
+});
+
+const av=n=>({block:{type:n,fields:{VEL:100}}});
+Blockly.serialization.workspaces.load({blocks:{languageVersion:0,blocks:[{type:'inicio',x:30,y:30,next:{block:{type:'repetir',fields:{N:4},inputs:{DO:av('avanzar')},next:{block:{type:'esperar',fields:{SEG:1},next:{block:{type:'repetir',fields:{N:4},inputs:{DO:av('retroceder')}}}}}}}}]}},ws);
+
+function walk(b){
+  const out=[];
+  for(;b;b=b.getNextBlock()){
+    const t=b.type;
+    if(t==='servo1')out.push({t:'a',s:0,a:+b.getFieldValue('ANG')});
+    else if(t==='servo2')out.push({t:'a',s:1,a:+b.getFieldValue('ANG')});
+    else if(t==='esperar')out.push({t:'w',v:+b.getFieldValue('SEG')});
+    else if(MOV[t])out.push({t:'m',n:t,v:+b.getFieldValue('VEL')});
+    else if(t==='repetir')out.push({t:'r',n:+b.getFieldValue('N'),b:walk(b.getInputTargetBlock('DO'))});
+  }
+  return out;
+}
+function prog(){
+  const st=ws.getTopBlocks(true).find(b=>b.type==='inicio');
+  return st?walk(st.getNextBlock()):null;
+}
+
+/* ---------- Código Arduino ---------- */
+const VARS=['i','j','k','l','m'];
+let used=new Set();
+function gen(ops,ind,d){
+  return ops.map(o=>{
+    if(o.t==='a')return `${ind}${o.s?'myservo2':'myservo'}.write(${o.a});`;
+    if(o.t==='w')return `${ind}delay(${Math.round(o.v*1000)});`;
+    if(o.t==='m'){used.add(o.n);return `${ind}${o.n}(${o.v});`;}
+    const v=VARS[d]||'x'+d;
+    return `${ind}for (int ${v} = 0; ${v} < ${o.n}; ${v}++) {\n${gen(o.b,ind+'  ',d+1)}\n${ind}}`;
+  }).filter(Boolean).join('\n');
+}
+function fnText(n){
+  const m=MOV[n];
+  return `void ${n}(int v) {\n`+m.st.map(([s,d],i)=>`  ${s?'myservo2':'myservo'}.write(${s?'zero2':'zero1'} ${d<0?'-':'+'} ${Math.abs(d)});\n  delay(${i===3&&m.x2?'v * 2':'v'});`).join('\n')+'\n}\n\n';
+}
+function codeText(){
+  used=new Set();
+  const ops=prog();
+  const body=ops?gen(ops,'  ',0):'  // Falta el bloque "Al empezar"';
+  return `#include <Servo.h>
+
+Servo myservo;   // Servo 1 (delantero) -> pin D9
+Servo myservo2;  // Servo 2 (trasero)   -> pin D10
+
+int zero1 = 98;  // posicion central del servo 1
+int zero2 = 90;  // posicion central del servo 2
+
+${[...used].map(fnText).join('')}void setup() {
+  myservo.attach(9);
+  myservo2.attach(10);
+  myservo.write(zero1);
+  myservo2.write(zero2);
+  delay(500);
+${body}
+}
+
+void loop() {
+  // El programa se ejecuta una sola vez en setup()
+}
+`;
+}
+function updCode(){
+  $('#code').textContent=codeText();
+  $('#msg').textContent=prog()?'':'⚠️ Pon el bloque "Al empezar"';
+}
+ws.addChangeListener(e=>{if(!e.isUiEvent)updCode();});
+async function copyCode(){
+  try{await navigator.clipboard.writeText(codeText());flash('¡Copiado!');}
+  catch(e){const r=document.createRange();r.selectNodeContents($('#code'));const s=getSelection();s.removeAllRanges();s.addRange(r);flash('Selecciona y copia (Ctrl+C)');}
+}
+function saveCode(){
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([codeText()],{type:'text/plain'}));
+  a.download='perro_robot.ino';a.click();URL.revokeObjectURL(a.href);
+}
+function flash(t){$('#msg').textContent=t;setTimeout(updCode,1800);}
+
+/* ---------- Simulación ---------- */
+const ang=[{c:98,t:98},{c:90,t:90}];
+let runId=0;
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+async function exec(ops,id){
+  for(const o of ops){
+    if(id!==runId)return false;
+    if(o.t==='a')ang[o.s].t=o.a;
+    else if(o.t==='w')await sleep(o.v*1000);
+    else if(o.t==='m'){
+      const m=MOV[o.n];
+      for(let i=0;i<4;i++){
+        ang[m.st[i][0]].t=Z[m.st[i][0]]+m.st[i][1];
+        await sleep(o.v*(i===3&&m.x2?2:1));
+        if(id!==runId)return false;
+      }
+    }else for(let i=0;i<o.n;i++){if(!(await exec(o.b,id)))return false;}
+  }
+  return id===runId;
+}
+async function run(){
+  const ops=prog();
+  if(!ops){updCode();return;}
+  const id=++runId;
+  $('#msg').textContent='Ejecutando…';
+  const ok=await exec(ops,id);
+  if(ok)$('#msg').textContent='¡Listo! 🎉';
+}
+function stopRun(){runId++;$('#msg').textContent='Detenido';}
+function resetDog(){runId++;ang[0].t=Z[0];ang[1].t=Z[1];updCode();}
+
+/* ---------- Three.js ---------- */
+const canvas=$('#c');
+const renderer=new THREE.WebGLRenderer({canvas,antialias:true,alpha:true});
+const scene=new THREE.Scene();
+const cam=new THREE.PerspectiveCamera(40,1,.1,50);
+scene.add(new THREE.AmbientLight(0xffffff,.75));
+const sun=new THREE.DirectionalLight(0xffffff,.7);sun.position.set(3,5,4);scene.add(sun);
+
+const M=c=>new THREE.MeshLambertMaterial({color:c});
+const card=M(0xcfa46a),cardD=M(0xb88a52),wood=M(0xecd29c),black=M(0x1a1a1a),metal=M(0xc8c8c8);
+function box(w,h,d,m,x,y,z,p,rz){
+  const o=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),m);
+  o.position.set(x,y,z);if(rz)o.rotation.z=rz;p.add(o);return o;
+}
+function screw(x,y,z,p,ax){
+  const o=new THREE.Mesh(new THREE.CylinderGeometry(.03,.03,.02,12),metal);
+  o.position.set(x,y,z);
+  if(ax==='z')o.rotation.x=Math.PI/2;
+  p.add(o);
+}
+const dog=new THREE.Group();scene.add(dog);
+const by=.62,bx=-.17;
+
+// Caja de cartón abierta
+box(1.05,.04,.8,cardD,bx,by,0,dog);
+[.38,-.38].forEach(z=>{box(1.05,.42,.04,card,bx,by+.23,z,dog);screw(bx+.4,by+.3,z*1.05,dog,'z');screw(bx-.4,by+.3,z*1.05,dog,'z');});
+box(.04,.42,.8,card,-.69,by+.23,0,dog);
+box(.04,.42,.8,cardD,.35,by+.23,0,dog);
+// Arduino y cables
+box(.65,.04,.3,M(0x1f6f8b),bx-.1,by+.05,0,dog);
+box(.2,.05,.13,black,bx,by+.09,0,dog);
+box(.1,.06,.13,metal,bx-.45,by+.09,0,dog);
+[[0xd62828,.12],[0xf08a1c,.03],[0x6b4423,-.06],[0x222222,.16],[0xf5f5f5,-.14],[0x2a5db0,-.2]].forEach(([c,z],i)=>box(.5,.02,.02,M(c),bx+.15,by+.1+i*.012,z,dog,(i%3-1)*.1));
+// Servos
+box(.2,.3,.24,M(0x2a5db0),.2,by+.2,0,dog);
+box(.2,.3,.24,M(0x7b3fb0),-.55,by+.2,0,dog);
+
+// Cabeza: tapa de cartón con orejas, se mueve con el Servo 1
+const headPivot=new THREE.Group();headPivot.position.set(.35,by+.44,0);dog.add(headPivot);
+box(.9,.05,.82,card,.45,0,0,headPivot);
+[.39,-.39].forEach(z=>box(.9,.3,.04,cardD,.45,-.15,z,headPivot));
+box(.04,.3,.82,cardD,.02,-.15,0,headPivot);
+[.2,-.2].forEach(z=>box(.32,.05,.24,card,1.05,0,z,headPivot));
+screw(.55,.03,.25,headPivot);screw(.55,.03,-.25,headPivot);screw(1.05,.03,0.2,headPivot);
+box(.04,.3,.82,cardD,.9,-.15,0,headPivot);
+
+// Palitos de helado pegados a las paletas de los servos (delante y detrás)
+const sticks=[];
+[.2,-.55].forEach(x=>{
+  const g=new THREE.Group();g.position.set(x,by-.08,0);dog.add(g);
+  box(.07,.03,1.3,wood,0,0,0,g);
+  [.66,-.66].forEach(z=>{
+    box(.32,.5,.04,card,.04,-.25,z,g);
+    screw(.12,-.08,z*1.03,g,'z');screw(-.04,-.08,z*1.03,g,'z');
+  });
+  sticks.push(g);
+});
+// Suelo
+const floor=new THREE.Mesh(new THREE.CircleGeometry(3,48),new THREE.MeshLambertMaterial({color:0xf3e6b0}));
+floor.rotation.x=-Math.PI/2;floor.position.y=-.01;scene.add(floor);
+
+// Cámara orbital simple
+let az=.9,pol=1.1,dist=5.2;
+function placeCam(){
+  cam.position.set(dist*Math.sin(pol)*Math.sin(az),dist*Math.cos(pol)+.8,dist*Math.sin(pol)*Math.cos(az));
+  cam.lookAt(0,.8,0);
+}
+let drag=null;
+canvas.addEventListener('pointerdown',e=>{drag=[e.clientX,e.clientY];canvas.setPointerCapture(e.pointerId);canvas.style.cursor='grabbing';});
+canvas.addEventListener('pointermove',e=>{
+  if(!drag)return;
+  az-=(e.clientX-drag[0])*.008;
+  pol=Math.min(1.5,Math.max(.4,pol-(e.clientY-drag[1])*.006));
+  drag=[e.clientX,e.clientY];
+});
+canvas.addEventListener('pointerup',()=>{drag=null;canvas.style.cursor='grab';});
+canvas.addEventListener('wheel',e=>{e.preventDefault();dist=Math.min(8,Math.max(3,dist+e.deltaY*.004));},{passive:false});
+
+function resize(){
+  const w=canvas.parentElement.clientWidth,h=canvas.parentElement.clientHeight;
+  if(!w||!h)return;
+  renderer.setSize(w,h,false);cam.aspect=w/h;cam.updateProjectionMatrix();
+}
+addEventListener('resize',()=>{resize();Blockly.svgResize(ws);});
+
+let last=performance.now();
+function frame(t){
+  const dt=Math.min(.05,(t-last)/1000);last=t;
+  ang.forEach(a=>{
+    const d=a.t-a.c,st=300*dt;
+    a.c+=Math.abs(d)<st?d:Math.sign(d)*st;
+  });
+  const r1=(ang[0].c-Z[0])*Math.PI/180,r2=(ang[1].c-Z[1])*Math.PI/180;
+  sticks[0].rotation.x=r1;sticks[1].rotation.x=r2;
+  dog.rotation.x=-.4*(r1+r2)/2;
+  headPivot.rotation.x=-.9*r1;
+  headPivot.rotation.z=.5+.4*r1;
+  $('#r1').textContent=Math.round(ang[0].c);
+  $('#r2').textContent=Math.round(ang[1].c);
+  placeCam();
+  renderer.render(scene,cam);
+  requestAnimationFrame(frame);
+}
+resize();updCode();requestAnimationFrame(frame);
+</script>
+</body>
+</html>
